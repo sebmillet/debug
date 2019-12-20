@@ -1,35 +1,106 @@
+// vim:ts=4:sw=4:tw=80:et
 // debug.cpp
 
 #include "debug.h"
 
 #include <stdarg.h>
 
+// What items to include in the debug lines:
+#define PRINT_TIMESTAMP
+#define PRINT_FILENAME
+#define REMOVE_FILE_EXTENSION
+//#define PRINT_LINE_NUMBER
+
 static char buffer[150];
 
-static const char *fullname_to_filename(const char* full) {
-    const char *p = full + strlen(full);
+void funcdbginit() {
+    static bool initialized = false;
 
-    while (p > full) {
+    if (initialized)
+        return;
+
+    initialized = true;
+
+    Serial.begin(9600);
+}
+
+static void print_spaces(int nb) {
+    char sp[20];
+    strncpy(sp, "                    ", sizeof(sp));
+    sp[19] = '\0';
+
+    if (nb <= 0)
+        return;
+    if (nb > (int)strlen(sp))
+        nb = (int)strlen(sp);
+    sp[nb] = '\0';
+
+    Serial.print(sp);
+}
+
+static const byte PRINT_PADDED_FILENAME_WIDTH = 18;
+static void print_prefix_of_debug_line(const char* full_name, long int line) {
+
+#ifdef PRINT_TIMESTAMP
+    char ts[9];
+    unsigned long t = millis();
+    snprintf(ts, sizeof(ts), "%4lu.%03lu", t / 1000, t % 1000);
+    Serial.print(ts);
+    Serial.print("  ");
+#endif // PRINT_TIMESTAMP
+
+#ifdef PRINT_FILENAME
+
+    const char *p = full_name + strlen(full_name);
+    while (p > full_name) {
         --p;
         if (*p == '/' || *p == '\\')
             break;
     }
+    const char* f;
     if (*p == '/' || *p == '\\')
-        return p + 1;
+        f = p + 1;
     else
-        return p;
+        f = p;
+
+    char modifiable_string[PRINT_PADDED_FILENAME_WIDTH + 1];
+    strncpy(modifiable_string, f, sizeof(modifiable_string));
+    modifiable_string[sizeof(modifiable_string) - 1] = '\0';
+
+#ifdef REMOVE_FILE_EXTENSION
+    char *e = modifiable_string + strlen(modifiable_string);
+    while (e > modifiable_string) {
+        --e;
+        if (*e == '.') {
+            *e = '\0';
+            break;
+        }
+    }
+#endif // REMOVE_FILE_EXTENSION
+
+#ifdef PRINT_LINE_NUMBER
+    char append[12];
+    snprintf(append, sizeof(append), ":%i", line);
+    strncat(modifiable_string, append, sizeof(modifiable_string));
+    modifiable_string[sizeof(modifiable_string) - 1] = '\0';
+#endif // PRINT_LINE_NUMBER
+
+    Serial.print(modifiable_string);
+    print_spaces(PRINT_PADDED_FILENAME_WIDTH - strlen(modifiable_string));
+    Serial.print("  ");
+
+#endif // PRINT_FILENAME
+
 }
 
-void funcdbg(const char* file, const char* msg) {
-    Serial.print(fullname_to_filename(file));
-    Serial.print("  ");
+void funcdbg(const char* file, long int line, const char* msg) {
+    print_prefix_of_debug_line(file, line);
     Serial.print(msg);
     Serial.print("\n");
 }
 
-void funcdbgf(const char* file, const char* format, ...) {
-    Serial.print(fullname_to_filename(file));
-    Serial.print("  ");
+void funcdbgf(const char* file, long int line, const char* format, ...) {
+    print_prefix_of_debug_line(file, line);
     va_list args;
     va_start(args, format);
     vsnprintf(buffer, sizeof(buffer), format, args);
@@ -50,7 +121,8 @@ static void uint8_to_2char(char c[2], uint8_t v) {
     }
 }
 
-void bin_to_hex_string(char *buf, byte buf_len, const void *data, byte data_len) {
+static void bin_to_hex_string(char *buf, byte buf_len,
+                              const void *data, byte data_len) {
     char c[2];
 
     byte idx = 0;
@@ -66,6 +138,20 @@ void bin_to_hex_string(char *buf, byte buf_len, const void *data, byte data_len)
     if (idx >= 1)
         --idx;
     buf[idx] = '\0';
+}
+
+char output[200];
+void funcdbgbin(const char* file, long int line, const char *prefix,
+                const void* data, byte data_len) {
+    bin_to_hex_string(output, sizeof(output), data, data_len);
+    print_prefix_of_debug_line(file, line);
+    Serial.print(prefix);
+
+    char small_buf[20];
+    snprintf(small_buf, sizeof(small_buf), "l=%i:  ", data_len);
+    Serial.print(small_buf);
+    Serial.print(output);
+    Serial.print("\n");
 }
 
 EventTimer::EventTimer(): next(0), list_locked(false) {
