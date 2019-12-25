@@ -6,12 +6,10 @@
 
 #include <Arduino.h>
 
-#define dbginit() funcdbginit()
 #define dbg(a)    funcdbg(__FILE__, __LINE__, a)
 #define dbgf(...) funcdbgf(__FILE__, __LINE__, __VA_ARGS__)
 #define dbgbin(a, b, c) funcdbgbin(__FILE__, __LINE__, a, b, c)
 
-void funcdbginit();
 void funcdbg(const char* file, long int line, const char *msg);
 void funcdbgf(const char* file, long int line, const char *format, ...)
      __attribute__((format(printf, 3, 4)));

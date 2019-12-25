@@ -38,13 +38,13 @@ static void print_spaces(int nb) {
     Serial.print(sp);
 }
 
-static const byte PRINT_PADDED_FILENAME_WIDTH = 18;
+static const byte PRINT_PADDED_FILENAME_WIDTH = 13;
 static void print_prefix_of_debug_line(const char* full_name, long int line) {
 
 #ifdef PRINT_TIMESTAMP
     char ts[9];
     unsigned long t = millis();
-    snprintf(ts, sizeof(ts), "%4lu.%03lu", t / 1000, t % 1000);
+    snprintf(ts, sizeof(ts), "%3lu.%03lu", t / 1000, t % 1000);
     Serial.print(ts);
     Serial.print("  ");
 #endif // PRINT_TIMESTAMP
@@ -94,12 +94,18 @@ static void print_prefix_of_debug_line(const char* full_name, long int line) {
 }
 
 void funcdbg(const char* file, long int line, const char* msg) {
+
+    funcdbginit();
+
     print_prefix_of_debug_line(file, line);
     Serial.print(msg);
     Serial.print("\n");
 }
 
 void funcdbgf(const char* file, long int line, const char* format, ...) {
+
+    funcdbginit();
+
     print_prefix_of_debug_line(file, line);
     va_list args;
     va_start(args, format);
@@ -143,6 +149,9 @@ static void bin_to_hex_string(char *buf, byte buf_len,
 char output[200];
 void funcdbgbin(const char* file, long int line, const char *prefix,
                 const void* data, byte data_len) {
+
+    funcdbginit();
+
     bin_to_hex_string(output, sizeof(output), data, data_len);
     print_prefix_of_debug_line(file, line);
     Serial.print(prefix);
