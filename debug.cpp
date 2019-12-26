@@ -9,7 +9,7 @@
 #define PRINT_TIMESTAMP
 #define PRINT_FILENAME
 #define REMOVE_FILE_EXTENSION
-//#define PRINT_LINE_NUMBER
+#define DEFAULT_PRINT_LINE_NUMBER false
 
 static char buffer[150];
 
@@ -39,7 +39,8 @@ static void print_spaces(int nb) {
 }
 
 static const byte PRINT_PADDED_FILENAME_WIDTH = 13;
-static void print_prefix_of_debug_line(const char* full_name, long int line) {
+static void print_prefix_of_debug_line(const char* full_name, long int line,
+              bool print_line_number = DEFAULT_PRINT_LINE_NUMBER) {
 
 #ifdef PRINT_TIMESTAMP
     char ts[9];
@@ -78,12 +79,12 @@ static void print_prefix_of_debug_line(const char* full_name, long int line) {
     }
 #endif // REMOVE_FILE_EXTENSION
 
-#ifdef PRINT_LINE_NUMBER
-    char append[12];
-    snprintf(append, sizeof(append), ":%i", line);
-    strncat(modifiable_string, append, sizeof(modifiable_string));
-    modifiable_string[sizeof(modifiable_string) - 1] = '\0';
-#endif // PRINT_LINE_NUMBER
+    if (print_line_number) {
+        char append[12];
+        snprintf(append, sizeof(append), ":%li", line);
+        strncat(modifiable_string, append, sizeof(modifiable_string));
+        modifiable_string[sizeof(modifiable_string) - 1] = '\0';
+    }
 
     Serial.print(modifiable_string);
     print_spaces(PRINT_PADDED_FILENAME_WIDTH - strlen(modifiable_string));
@@ -161,6 +162,24 @@ void funcdbgbin(const char* file, long int line, const char *prefix,
     Serial.print(small_buf);
     Serial.print(output);
     Serial.print("\n");
+}
+
+void funcassert(const char* file, long int line, bool a) {
+
+    if (a) {
+        return;
+    }
+
+    funcdbginit();
+
+    print_prefix_of_debug_line(file, line, true);
+    Serial.print("assert condition not met");
+    Serial.print("\n");
+    delay(200);
+
+    while (1)
+        ;
+
 }
 
 EventTimer::EventTimer(): next(0), list_locked(false) {
