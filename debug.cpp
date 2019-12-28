@@ -12,6 +12,25 @@
 #define DEFAULT_PRINT_LINE_NUMBER false
 
 static char buffer[150];
+static char progmem_reading_buffer[100];
+
+#ifdef __arm__
+// should use uinstd.h to define sbrk but Due causes a conflict
+extern "C" char* sbrk(int incr);
+#else  // __ARM__
+extern char *__brkval;
+#endif  // __arm__
+ 
+int freeMemory() {
+  char top;
+#ifdef __arm__
+  return &top - reinterpret_cast<char*>(sbrk(0));
+#elif defined(CORE_TEENSY) || (ARDUINO > 103 && ARDUINO != 151)
+  return &top - __brkval;
+#else  // __arm__
+  return __brkval ? &top - __brkval : &top - __malloc_heap_start;
+#endif  // __arm__
+}
 
 void funcdbginit() {
     static bool initialized = false;
@@ -94,23 +113,29 @@ static void print_prefix_of_debug_line(const char* full_name, long int line,
 
 }
 
-void funcdbg(const char* file, long int line, const char* msg) {
+void dbgfunc(const char* file, long int line, const char* progmem_str) {
 
     funcdbginit();
 
+    strcpy_P(progmem_reading_buffer, progmem_str);
     print_prefix_of_debug_line(file, line);
-    Serial.print(msg);
+    Serial.print(progmem_reading_buffer);
     Serial.print("\n");
 }
 
-void funcdbgf(const char* file, long int line, const char* format, ...) {
+void dbgffunc(const char* file, long int line, const char* progmem_fmt, ...) {
 
     funcdbginit();
 
+    strcpy_P(progmem_reading_buffer, progmem_fmt);
     print_prefix_of_debug_line(file, line);
     va_list args;
-    va_start(args, format);
-    vsnprintf(buffer, sizeof(buffer), format, args);
+
+    // FIXME
+#pragma GCC diagnostic ignored "-Wvarargs"
+    va_start(args, progmem_reading_buffer);
+
+    vsnprintf(buffer, sizeof(buffer), progmem_reading_buffer, args);
     va_end(args);
     Serial.print(buffer);
     Serial.print("\n");
@@ -147,24 +172,23 @@ static void bin_to_hex_string(char *buf, byte buf_len,
     buf[idx] = '\0';
 }
 
-char output[200];
-void funcdbgbin(const char* file, long int line, const char *prefix,
+void dbgbinfunc(const char* file, long int line, const char *prefix,
                 const void* data, byte data_len) {
 
     funcdbginit();
 
-    bin_to_hex_string(output, sizeof(output), data, data_len);
     print_prefix_of_debug_line(file, line);
     Serial.print(prefix);
 
     char small_buf[20];
     snprintf(small_buf, sizeof(small_buf), "l=%i:  ", data_len);
     Serial.print(small_buf);
-    Serial.print(output);
+    bin_to_hex_string(buffer, sizeof(buffer), data, data_len);
+    Serial.print(buffer);
     Serial.print("\n");
 }
 
-void funcassert(const char* file, long int line, bool a) {
+void assertfunc(const char* file, long int line, bool a) {
 
     if (a) {
         return;
@@ -198,8 +222,8 @@ void EventTimer::ev_set_1_string(const byte ev, const char *str) {
     strings[ev] = str;
 }
 
-void EventTimer::ev_set_all_strings(const char **strings, byte nb_strings) {
-    for (byte i = 1; i < nb_strings; ++i) {
+void EventTimer::ev_set_all_strings(const char* const* strings, byte nb) {
+    for (byte i = 1; i < nb; ++i) {
         ev_set_1_string(i, strings[i]);
     }
 }
@@ -221,12 +245,15 @@ void EventTimer::unlock_ev_list() {
     list_locked = false;
 }
 
-void EventTimer::ev_reg(const byte ev, const unsigned long t) {
+void EventTimer::ev_reg(byte ev, unsigned long t) {
 
     if (!lock_ev_list())
         return;
 
     list[next].ev = ev;
+    if (t == 4294967295) {
+        t = millis();
+    }
     list[next].t = t;
 
     next = (next + 1) % (sizeof(list) / sizeof(*list));
@@ -234,50 +261,63 @@ void EventTimer::ev_reg(const byte ev, const unsigned long t) {
     unlock_ev_list();
 }
 
-void EventTimer::serial_print_padded(const unsigned long n, byte w) {
-    char spaces[16];
-    strncpy(spaces, "               ", sizeof(spaces));
-    spaces[sizeof(spaces) - 1] = '\0';
+void EventTimer::serial_print_padded(const unsigned long n) {
+    char buffer[16];
+    snprintf(buffer, sizeof(buffer), "%7lu.%03u",
+      n / 1000, (unsigned int)(n % 1000));
+    Serial.print(buffer);
+}
 
-    unsigned long tmp = n;
-    byte log10 = 0;
-    while (tmp >= 10) {
-        tmp /= 10;
-        ++log10;
-    }
-    byte pad = (log10 > w ? 0 : w - log10);
-    if (pad > strlen(spaces))
-        pad = strlen(spaces);
-    spaces[pad] = '\0';
-    Serial.print(spaces);
-    Serial.print(n);
+const char sep_string[] PROGMEM = "------------+------------+----------\n";
+
+void print_progmem_string(const char *s) {
+    char buffer[EV_STRING_MAX_LENGTH + 1];
+
+    strcpy_P(buffer, s);
+    Serial.print(buffer);
 }
 
 void EventTimer::ev_print() {
-    const char* sep_string = "------------+------------+----------\n";
     if (!lock_ev_list())
         return;
 
-    Serial.print(sep_string);
+    funcdbginit();
 
     byte i = next;
+    int count = 0;
+    do {
+        if (list[i].ev != 0) {
+            ++count;
+        }
+        i = (i + 1) % (sizeof(list) / sizeof(*list));
+    } while (i != next);
+
+    if (!count) {
+        Serial.print(".\n");
+        unlock_ev_list();
+        return;
+    }
+
+    print_progmem_string(sep_string);
+
+    i = next;
     bool first_line = true;
     unsigned long last_t;
     do {
         if (list[i].ev != 0) {
             byte ev = list[i].ev;
             unsigned long t = list[i].t;
-            serial_print_padded(t, 10);
+            serial_print_padded(t);
             if (!first_line) {
                 Serial.print(" |");
-                serial_print_padded(t - last_t, 10);
+                serial_print_padded(t - last_t);
             } else {
                 Serial.print(" |           ");
             }
 
             Serial.print(" | ");
             if (strings[ev]) {
-                Serial.print(strings[ev]);
+                print_progmem_string(strings[ev]);
             } else {
                 Serial.print("[");
                 Serial.print(ev);
@@ -292,7 +332,7 @@ void EventTimer::ev_print() {
         i = (i + 1) % (sizeof(list) / sizeof(*list));
     } while (i != next);
 
-    Serial.print(sep_string);
+    print_progmem_string(sep_string);
 
     for (byte i = 0; i < sizeof(list) / sizeof(*list); ++i) {
         list[i].ev = 0;
@@ -301,10 +341,10 @@ void EventTimer::ev_print() {
     unlock_ev_list();
 }
 
-void EventTimer::ev_print_by_period(const unsigned long period_us) {
+void EventTimer::ev_print_by_period(const unsigned long period_ms) {
     static unsigned long last_t = 0;
-    unsigned long t = micros();
-    if (t - last_t > period_us) {
+    unsigned long t = millis();
+    if (t - last_t > period_ms) {
         ev_print();
         last_t = t;
     }

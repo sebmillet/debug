@@ -6,18 +6,29 @@
 
 #include <Arduino.h>
 
-#define dbg(a)          funcdbg(__FILE__, __LINE__, a)
-#define dbgf(...)       funcdbgf(__FILE__, __LINE__, __VA_ARGS__)
-#define dbgbin(a, b, c) funcdbgbin(__FILE__, __LINE__, a, b, c)
-#define assert(a)       funcassert(__FILE__, __LINE__, a)
+#define EV_STRING_MAX_LENGTH 40
 
-void funcdbg(const char* file, long int line, const char *msg);
-void funcdbgf(const char* file, long int line, const char *format, ...)
+#define dbg(a) \
+    { static const char tmp[] PROGMEM = {a}; \
+      dbgfunc(__FILE__, __LINE__, tmp); \
+    }
+
+#define dbgf(a, ...) \
+    { static const char tmp[] PROGMEM = {a}; \
+      dbgffunc(__FILE__, __LINE__, tmp, __VA_ARGS__); \
+    }
+
+#define dbgbin(a, b, c) dbgbinfunc(__FILE__, __LINE__, a, b, c)
+#define assert(a)       assertfunc(__FILE__, __LINE__, a)
+
+void dbgfunc(const char* file, long int line, const char *msg);
+void dbgffunc(const char* file, long int line, const char *format, ...)
      __attribute__((format(printf, 3, 4)));
-void funcdbgbin(const char* file, long int line, const char *prefix,
+void dbgbinfunc(const char* file, long int line, const char *prefix,
                 const void* data, byte data_len);
-void funcassert(const char* file, long int line, bool a);
+void assertfunc(const char* file, long int line, bool a);
 
+int freeMemory();
 
 //
 // EVENTS TIMING MANAGEMENT
@@ -28,7 +39,7 @@ typedef struct {
     unsigned long t;
 } ev_t;
 
-#define EV_MAX_TYPES   20
+#define EV_MAX_TYPES   10
 #define EV_BUFFER_SIZE 60
 
 class EventTimer {
@@ -39,17 +50,17 @@ class EventTimer {
         byte next;
         bool list_locked;
 
-        void serial_print_padded(const unsigned long n, byte w);
+        void serial_print_padded(const unsigned long n);
         bool lock_ev_list();
         void unlock_ev_list();
 
     public:
         EventTimer();
         void ev_set_1_string(const byte ev, const char *str);
-        void ev_set_all_strings(const char *strings[], byte nb_strings);
-        void ev_reg(const byte ev, const unsigned long t);
+        void ev_set_all_strings(const char* const* strings, byte nb);
+        void ev_reg(byte ev, unsigned long t = 4294967295);
         void ev_print();
-        void ev_print_by_period(const unsigned long period_us);
+        void ev_print_by_period(const unsigned long period_ms);
 
 };
 
