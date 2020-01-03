@@ -1,5 +1,28 @@
 // vim:ts=4:sw=4:tw=80:et
-// debug.cpp
+/*
+  debug.cpp
+
+  Provides some useful functions to output debug from Arduino on the serial
+  line.
+  Used and tested with an Arduino nano.
+*/
+
+/*
+  Copyright 2020 Sébastien Millet
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses>.
+*/
 
 #include "debug.h"
 
@@ -20,7 +43,7 @@ extern "C" char* sbrk(int incr);
 #else  // __ARM__
 extern char *__brkval;
 #endif  // __arm__
- 
+
 int freeMemory() {
   char top;
 #ifdef __arm__
@@ -140,7 +163,7 @@ void dbgffunc(const char* file, long int line, const char* progmem_fmt, ...) {
     Serial.print(buffer);
     Serial.print("\n");
 }
- 
+
 static void uint8_to_2char(char c[2], uint8_t v) {
     c[0] = (v >> 4) & 0xF;
     c[1] = v & 0xF;
