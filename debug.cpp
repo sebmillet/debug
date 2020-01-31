@@ -65,7 +65,7 @@ void funcdbginit() {
 
     initialized = true;
 
-    Serial.begin(9600);
+    Serial.begin(115200);
 }
 
 static void print_spaces(int nb) {
